@@ -11,8 +11,9 @@ OpenEMS’ UI later visualises.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Sequence
+from dataclasses import dataclass, asdict
+from datetime import datetime
+from typing import Sequence, Optional, Dict, Any
 import numpy as np
 
 
@@ -26,6 +27,8 @@ class SimulationResult:
     # -------------- KPIs (aggregated for the horizon) -------------------
     grid_buy_cost: float
     grid_sell_revenue: float
+    ess_net_kwh: float                     # positive == discharge
+    time: Optional[datetime] = None        # start time of horizon
 
     @property
     def total_cost(self) -> float:
@@ -34,3 +37,7 @@ class SimulationResult:
     def as_numpy(self) -> np.ndarray:
         """Return the schedule as an int array (handy for GA/analytics)."""
         return np.asarray(self.best_schedule, dtype=np.int8)
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Return a dictionary representation of all dataclass fields."""
+        return asdict(self)

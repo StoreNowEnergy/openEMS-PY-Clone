@@ -27,7 +27,7 @@ from deap import base, creator, tools
 
 from global_optimization_context import GlobalOptimizationContext
 from energy_flow import solve_energy_flow, EnergyFlowResult
-from simulation_result import SimulationResult
+from simulation_results import SimulationResult
 
 
 # ---------------------------------------------------------------------------#
@@ -217,10 +217,12 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
     soc = ctx.initial_soc_kwh
     kpi = FitnessAccumulator()
     violations = 0
+    ess_net_sum = 0.0
     for mode_int, period in zip(best, ctx.periods):
         flow = solve_energy_flow(ctx, period, soc, ctx.risk_factor)
         kpi.add(flow)
         violations += flow.violated_constraints
+        ess_net_sum += flow.ess_net
         soc += 0  # SoC update not needed for KPIs beyond 24 h window
 
     return SimulationResult(
@@ -229,5 +231,7 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
         violated_constraints=violations,
         grid_buy_cost=kpi.grid_buy_cost,
         grid_sell_revenue=kpi.grid_sell_revenue,
+        ess_net_kwh=ess_net_sum,
+        time=ctx.periods[0].time,
     )
 
