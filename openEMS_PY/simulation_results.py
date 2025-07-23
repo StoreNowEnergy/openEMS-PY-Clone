@@ -1,6 +1,6 @@
 """
-simulation_result.py
-====================
+simulation_results.py
+=====================
 
 Dataclass mirroring
 
