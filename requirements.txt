@@ -1,0 +1,8 @@
+# Requirements for running the openEMS-PY-Clone project
+numpy
+pandas
+scipy
+deap
+matplotlib
+tqdm
+pvlib
