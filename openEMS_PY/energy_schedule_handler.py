@@ -26,10 +26,16 @@ from initial_population_utils import Transition
 # --------------------------------------------------------------------- #
 @dataclass(slots=True)
 class BatteryScheduleHandler:
-    modes: Sequence[str] = ("CHARGE", "DISCHARGE", "IDLE", "AUTO_PRICE", "AUTO_PV")
-    @property
-    def max_mode_value(self):
-        return len(self.modes) - 1
+    parent_id: str = "battery0"
+
+    # (you could load these from a config file – hard‑coded for the demo)
+    MODES: Sequence[str] = (
+        "CHARGE",        #   0
+        "DISCHARGE",     #   1
+        "IDLE",          #   2
+        "AUTO_PRICE",    #   3
+        "AUTO_PV",       #   4
+    )
 
 
     # ------------------------------------------------------------------ #
