@@ -34,7 +34,12 @@ TZ                = "Europe/Berlin"
 GRID_TAX_EUR_PER_KWH = 0.15
 VAT_RATE             = 0.21
 
-DATA_DIR   = Path(r"C:\Users\AlexB\OneDrive\Desktop\HeatUnicorns\MVP\Trial_C_Integration\OptimizationDynamicTarifs\GeneticAlgorithm_openEMS\CloneStructure\data")
+# Path to the CSV input files shipped with the repository.  The scripts used to
+# contain a copy of all modules inside ``data/`` but these have been moved to the
+# ``openEMS_PY`` package directory.  ``DATA_DIR`` now points to the remaining
+# CSV files within the repository so ``main_simulation.py`` can be executed from
+# any working directory.
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 LOAD_FILE  = DATA_DIR / "LoadProfilesSummary.csv"
 PRICE_FILE = DATA_DIR / "DE_day_ahead_2023.csv"
 PV_FILE    = DATA_DIR / "PV_Production.csv"              # (kept for clarity)
