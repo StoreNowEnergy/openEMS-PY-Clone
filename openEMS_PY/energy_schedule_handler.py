@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 from dataclasses import dataclass
 
-from global_optimization_context import GlobalOptimizationContext
-from initial_population_utils import Transition
+from .global_optimization_context import GlobalOptimizationContext
+from .initial_population_utils import Transition
 
 
 # --------------------------------------------------------------------- #
