@@ -133,8 +133,14 @@ def run_simulation(df_input: pd.DataFrame,
     for idx in tqdm(range(max_start), desc="simulate year"):
 
         ctx = GlobalOptimizationContext.from_dataframe(
-            df_input, idx, system, soc, risk,
-            quarter_horizon=quarter_horizon, hour_horizon=hour_horizon
+            df_input,
+            idx,
+            system.as_ess(),
+            system.as_grid(),
+            soc,
+            risk,
+            quarter_horizon=quarter_horizon,
+            hour_horizon=hour_horizon,
         )
         res = Simulator.simulate(ctx)
         results.append(res)
