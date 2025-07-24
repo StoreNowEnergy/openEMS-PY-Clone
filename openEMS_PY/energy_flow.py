@@ -93,6 +93,8 @@ def solve_energy_flow(
     # maximum (dis)charge energy this period
     max_charge_kwh = ess.max_charge_kw * hrs
     max_discharge_kwh = ess.max_discharge_kw * hrs
+    max_grid_import_kwh = grid.max_buy_kw * hrs
+    max_grid_export_kwh = grid.max_sell_kw * hrs
 
     # SoC‑based limits
     charge_room   = max(0.0, ess.max_soc_kwh - soc_kwh) / ess.charge_eff
@@ -182,8 +184,13 @@ def solve_energy_flow(
     row = np.zeros(len(C)); row[C.ESS] = 1
     A_ub.append(row); b_ub.append(discharge_cap)
 
-    # grid import/export power limits can be enforced in a more complex
-    # model; omitted here (same default as Java if not configured)
+    # 3) grid import limit  -GRID ≤ max_grid_import_kwh  (GRID negative = import)
+    row = np.zeros(len(C)); row[C.GRID] = -1
+    A_ub.append(row); b_ub.append(max_grid_import_kwh)
+
+    # 4) grid export limit   GRID ≤ max_grid_export_kwh
+    row = np.zeros(len(C)); row[C.GRID] = 1
+    A_ub.append(row); b_ub.append(max_grid_export_kwh)
 
     A_ub = np.vstack(A_ub)
     b_ub = np.array(b_ub)
