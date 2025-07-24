@@ -25,9 +25,9 @@ from typing import List
 import numpy as np
 from deap import base, creator, tools
 
-from global_optimization_context import GlobalOptimizationContext
-from energy_flow import solve_energy_flow, EnergyFlowResult
-from simulation_results import SimulationResult
+from .global_optimization_context import GlobalOptimizationContext
+from .energy_flow import solve_energy_flow, EnergyFlowResult
+from .simulation_results import SimulationResult
 
 
 # ---------------------------------------------------------------------------#
