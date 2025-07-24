@@ -17,13 +17,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import pvlib                                             # <- your PV fetch
+# PV data now loaded from a CSV file instead of PVGIS
 
 # --- OpenEMS‑style helper modules --------------------------------------
 from .system_parameters import SystemParameters
 from .risk_level import RiskLevel
 from .global_optimization_context import GlobalOptimizationContext
-from .simulator import Simulator, SimulationResult        # noqa: F401
+from .simulator import simulate, SimulationResult        # noqa: F401
 
 # ----------------------------------------------------------------------
 # 0)  GLOBAL CONSTANTS  (reuse yours – change once here)                #
@@ -34,10 +34,10 @@ TZ                = "Europe/Berlin"
 GRID_TAX_EUR_PER_KWH = 0.15
 VAT_RATE             = 0.21
 
-DATA_DIR   = Path(r"C:\Users\AlexB\OneDrive\Desktop\HeatUnicorns\MVP\Trial_C_Integration\OptimizationDynamicTarifs\GeneticAlgorithm_openEMS\CloneStructure\data")
+DATA_DIR   = Path(__file__).resolve().parent.parent / "data"
 LOAD_FILE  = DATA_DIR / "LoadProfilesSummary.csv"
 PRICE_FILE = DATA_DIR / "DE_day_ahead_2023.csv"
-PV_FILE    = DATA_DIR / "PV_Production.csv"              # (kept for clarity)
+PV_FILE    = DATA_DIR / "PV_2021.csv"              # 15 min PV production
 
 # ----------------------------------------------------------------------
 # 1)  DATA LOADING  (your original code – almost unchanged)             #
@@ -59,23 +59,15 @@ def load_input_dataframe() -> pd.DataFrame:
     )
     load_15min *= ANNUAL_CONS_KWH / load_15min.sum()
 
-    # ── 2. PV PRODUCTION  – request hourly PVGIS → interpolate 15 min
-    power_dc_df, *_ = pvlib.iotools.get_pvgis_hourly(
-        latitude=51.176164, longitude=6.819423,
-        start=YEAR, end=YEAR,
-        raddatabase="PVGIS-SARAH3", pvcalculation=True,
-        peakpower=6, pvtechchoice="crystSi",
-        mountingplace="building", loss=14,
-        surface_tilt=30, surface_azimuth=180,
-        components=False, trackingtype=0, map_variables=True,
-    )
-    pv_hourly_kW = (power_dc_df["P"] / 1_000).tz_convert(TZ)
+    # ── 2. PV PRODUCTION  – read 15 min energy values from CSV
+    pv_df = pd.read_csv(PV_FILE, parse_dates=["timestamp"])  # columns: timestamp,pv_kwh
+    pv_df["timestamp"] = _to_utc(pv_df["timestamp"])
     pv_15min = (
-        pv_hourly_kW
-        .resample("15min", closed="left", label="left")
-        .ffill()
+        pv_df.set_index("timestamp")["pv_kwh"].astype(float)
+        .tz_convert(TZ)
+        .loc[f"{YEAR}-01-01":f"{YEAR}-12-31 23:45"]
+        .fillna(0.0)
         .reindex(load_15min.index, method="ffill")
-        * 0.25                                     # kW → kWh/15 min
     )
 
     # ── 3. DAY‑AHEAD PRICES
@@ -142,7 +134,7 @@ def run_simulation(df_input: pd.DataFrame,
             quarter_horizon=quarter_horizon,
             hour_horizon=hour_horizon,
         )
-        res = Simulator.simulate(ctx)
+        res = simulate(ctx)
         results.append(res)
 
         soc_delta = res.ess_net_kwh

@@ -22,29 +22,31 @@ from typing import Tuple
 import numpy as np
 from scipy.optimize import linprog
 
-from global_optimization_context import Period, GlobalOptimizationContext
+from .global_optimization_context import Period, GlobalOptimizationContext
 
 
 # ---------------------------------------------------------------------------#
 #  Variable indices (mirror Java enum EnergyFlowCoefficient)                 #
 # ---------------------------------------------------------------------------#
 
+
 class C(IntEnum):
-    PROD             = 0   # generation (PV)
-    CONS             = 1   # consumption (load)
-    ESS              = 2   # battery net (+ discharge, − charge)
-    GRID             = 3   # grid net   (+ export,    − import)
-    PROD_TO_CONS     = 4
-    PROD_TO_ESS      = 5
-    PROD_TO_GRID     = 6
-    GRID_TO_CONS     = 7
-    GRID_TO_ESS      = 8
-    ESS_TO_CONS      = 9   # — 10 variables total
+    PROD = 0  # generation (PV)
+    CONS = 1  # consumption (load)
+    ESS = 2  # battery net (+ discharge, − charge)
+    GRID = 3  # grid net   (+ export,    − import)
+    PROD_TO_CONS = 4
+    PROD_TO_ESS = 5
+    PROD_TO_GRID = 6
+    GRID_TO_CONS = 7
+    GRID_TO_ESS = 8
+    ESS_TO_CONS = 9  # — 10 variables total
 
 
 # ---------------------------------------------------------------------------#
 #  Result container (like Java EnergyFlow record)                             #
 # ---------------------------------------------------------------------------#
+
 
 @dataclass(slots=True)
 class EnergyFlowResult:
@@ -72,11 +74,13 @@ class EnergyFlowResult:
 #  Core solver                                                               #
 # ---------------------------------------------------------------------------#
 
+
 def solve_energy_flow(
     goc: GlobalOptimizationContext,
     period: Period,
     soc_kwh: float,
     risk_factor: float,
+    mode: int | None = None,
 ) -> EnergyFlowResult:
     """
     Build the LP shown in EnergyFlow.java §“buildLinearProgram()”,
@@ -93,12 +97,14 @@ def solve_energy_flow(
     # maximum (dis)charge energy this period
     max_charge_kwh = ess.max_charge_kw * hrs
     max_discharge_kwh = ess.max_discharge_kw * hrs
+    max_grid_import_kwh = grid.max_buy_kw * hrs
+    max_grid_export_kwh = grid.max_sell_kw * hrs
 
     # SoC‑based limits
-    charge_room   = max(0.0, ess.max_soc_kwh - soc_kwh) / ess.charge_eff
+    charge_room = max(0.0, ess.max_soc_kwh - soc_kwh) / ess.charge_eff
     discharge_room = max(0.0, soc_kwh - ess.min_soc_kwh) * ess.discharge_eff
 
-    charge_cap   = min(max_charge_kwh, charge_room)
+    charge_cap = min(max_charge_kwh, charge_room)
     discharge_cap = min(max_discharge_kwh, discharge_room)
 
     # ------------------------------------------------------------------ #
@@ -106,8 +112,8 @@ def solve_energy_flow(
     # ------------------------------------------------------------------ #
     c = np.zeros(len(C))
     c[C.GRID_TO_CONS] = period.price_buy
-    c[C.GRID_TO_ESS]  = period.price_buy * risk_factor     # <‑‑ risk factor
-    c[C.PROD_TO_GRID] = -period.price_sell                 # revenue negative
+    c[C.GRID_TO_ESS] = period.price_buy * risk_factor  # <‑‑ risk factor
+    c[C.PROD_TO_GRID] = -period.price_sell  # revenue negative
 
     # ------------------------------------------------------------------ #
     # Equality constraints  A_eq · x  = b_eq                            #
@@ -124,50 +130,45 @@ def solve_energy_flow(
 
     # 2) PROD distribution
     row = np.zeros(len(C))
-    row[C.PROD]             = -1
-    row[[C.PROD_TO_CONS,
-         C.PROD_TO_ESS,
-         C.PROD_TO_GRID]]   = 1
+    row[C.PROD] = -1
+    row[[C.PROD_TO_CONS, C.PROD_TO_ESS, C.PROD_TO_GRID]] = 1
     A_eq.append(row)
     b_eq.append(0)
 
     # 3) CONS distribution
     row = np.zeros(len(C))
-    row[C.CONS]             = 1
-    row[[C.PROD_TO_CONS,
-         C.GRID_TO_CONS,
-         C.ESS_TO_CONS]]    = -1
+    row[C.CONS] = 1
+    row[[C.PROD_TO_CONS, C.GRID_TO_CONS, C.ESS_TO_CONS]] = -1
     A_eq.append(row)
     b_eq.append(0)
 
     # 4) GRID distribution
     row = np.zeros(len(C))
-    row[C.GRID]             = -1
-    row[[C.GRID_TO_CONS,
-         C.GRID_TO_ESS]]    = 1
-    row[C.PROD_TO_GRID]     = -1
+    row[C.GRID] = -1
+    row[[C.GRID_TO_CONS, C.GRID_TO_ESS]] = 1
+    row[C.PROD_TO_GRID] = -1
     A_eq.append(row)
     b_eq.append(0)
 
     # 5) ESS distribution
     row = np.zeros(len(C))
-    row[C.ESS]              = -1
-    row[C.ESS_TO_CONS]      = 1
-    row[[C.PROD_TO_ESS,
-         C.GRID_TO_ESS]]    = -1
+    row[C.ESS] = -1
+    row[C.ESS_TO_CONS] = 1
+    row[[C.PROD_TO_ESS, C.GRID_TO_ESS]] = -1
     A_eq.append(row)
     b_eq.append(0)
 
     # 6) fixed production
-    row = np.zeros(len(C)); row[C.PROD] = 1
-    A_eq.append(row); b_eq.append(period.production_kwh)
+    row = np.zeros(len(C))
+    row[C.PROD] = 1
+    A_eq.append(row)
+    b_eq.append(period.production_kwh)
 
     # 7) fixed consumption
-    row = np.zeros(len(C)); row[C.CONS] = 1
-    A_eq.append(row); b_eq.append(period.consumption_kwh)
-
-    A_eq = np.vstack(A_eq)
-    b_eq = np.array(b_eq)
+    row = np.zeros(len(C))
+    row[C.CONS] = 1
+    A_eq.append(row)
+    b_eq.append(period.consumption_kwh)
 
     # ------------------------------------------------------------------ #
     # Inequality constraints  A_ub · x  ≤ b_ub                            #
@@ -175,15 +176,60 @@ def solve_energy_flow(
     A_ub, b_ub = [], []
 
     # 1) charge limit   −ESS ≤ charge_cap  (ESS negative == charging)
-    row = np.zeros(len(C)); row[C.ESS] = -1
-    A_ub.append(row); b_ub.append(charge_cap)
+    row = np.zeros(len(C))
+    row[C.ESS] = -1
+    A_ub.append(row)
+    b_ub.append(charge_cap)
 
     # 2) discharge limit  ESS ≤ discharge_cap
-    row = np.zeros(len(C)); row[C.ESS] = 1
-    A_ub.append(row); b_ub.append(discharge_cap)
+    row = np.zeros(len(C))
+    row[C.ESS] = 1
+    A_ub.append(row)
+    b_ub.append(discharge_cap)
 
-    # grid import/export power limits can be enforced in a more complex
-    # model; omitted here (same default as Java if not configured)
+    # 3) grid import limit  -GRID ≤ max_grid_import_kwh  (GRID negative = import)
+    row = np.zeros(len(C))
+    row[C.GRID] = -1
+    A_ub.append(row)
+    b_ub.append(max_grid_import_kwh)
+
+    # 4) grid export limit   GRID ≤ max_grid_export_kwh
+    row = np.zeros(len(C))
+    row[C.GRID] = 1
+    A_ub.append(row)
+    b_ub.append(max_grid_export_kwh)
+
+    # 5) minimum direct PV consumption
+    min_self_cons = min(period.production_kwh, period.consumption_kwh)
+    row = np.zeros(len(C))
+    row[C.PROD_TO_CONS] = -1
+    A_ub.append(row)
+    b_ub.append(-min_self_cons)
+
+    # -- mode-specific constraints ------------------------------------
+    if mode == 0:  # CHARGE only
+        row = np.zeros(len(C))
+        row[C.ESS] = 1
+        A_ub.append(row)
+        b_ub.append(0)  # ESS ≤ 0
+    elif mode == 1:  # DISCHARGE only
+        row = np.zeros(len(C))
+        row[C.ESS] = -1
+        A_ub.append(row)
+        b_ub.append(0)  # ESS ≥ 0
+    elif mode == 2:  # IDLE
+        row = np.zeros(len(C))
+        row[C.ESS] = 1
+        A_eq.append(row)
+        b_eq.append(0)
+    elif mode == 4:  # AUTO_PV - no grid charging
+        row = np.zeros(len(C))
+        row[C.GRID_TO_ESS] = 1
+        A_eq.append(row)
+        b_eq.append(0)
+
+    A_eq = np.vstack(A_eq)
+    b_eq = np.array(b_eq)
 
     A_ub = np.vstack(A_ub)
     b_ub = np.array(b_ub)
@@ -201,7 +247,14 @@ def solve_energy_flow(
     # Solve LP                                                           #
     # ------------------------------------------------------------------ #
     res = linprog(
-        c, A_ub, b_ub, A_eq, b_eq, bounds=bounds, method="highs", options={"disp": False}
+        c,
+        A_ub,
+        b_ub,
+        A_eq,
+        b_eq,
+        bounds=bounds,
+        method="highs",
+        options={"disp": False},
     )
 
     violations = 0 if res.success else 1
