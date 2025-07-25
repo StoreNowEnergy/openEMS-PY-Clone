@@ -30,6 +30,7 @@ from .energy_flow import solve_energy_flow, EnergyFlowResult
 from .simulation_results import SimulationResult
 
 
+
 # ---------------------------------------------------------------------------#
 #  GA parameters (keep tiny – Python is slower than Java)                    #
 # ---------------------------------------------------------------------------#

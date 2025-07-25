@@ -25,6 +25,7 @@ from scipy.optimize import linprog
 from .global_optimization_context import Period, GlobalOptimizationContext
 
 
+
 # ---------------------------------------------------------------------------#
 #  Variable indices (mirror Java enum EnergyFlowCoefficient)                 #
 # ---------------------------------------------------------------------------#
