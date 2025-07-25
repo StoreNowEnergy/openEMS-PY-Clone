@@ -30,6 +30,7 @@ from .energy_flow import solve_energy_flow, EnergyFlowResult
 from .simulation_results import SimulationResult
 
 
+
 # ---------------------------------------------------------------------------#
 #  GA parameters (keep tiny – Python is slower than Java)                    #
 # ---------------------------------------------------------------------------#
@@ -64,7 +65,7 @@ class FitnessAccumulator:
         We merge them into a single scalar by huge weights.
         """
         return (
-            self.violations * 1e9      # dominate everything
+            self.violations * 1e9  # dominate everything
             + self.grid_buy_cost
             - self.grid_sell_revenue
         )
@@ -112,7 +113,9 @@ def build_initial_population(ctx: GlobalOptimizationContext) -> List[List[int]]:
     schedule = [IDLE] * n
     for i, p in enumerate(ctx.periods):
         hour = p.time.hour
-        schedule[i] = CHARGE if 9 <= hour < 16 else DISCHARGE if 18 <= hour < 23 else IDLE
+        schedule[i] = (
+            CHARGE if 9 <= hour < 16 else DISCHARGE if 18 <= hour < 23 else IDLE
+        )
     pop.append(schedule)
 
     # 5) all AUTO_PV
@@ -133,8 +136,13 @@ def _setup_deap(n_periods: int):
 
     toolbox = base.Toolbox()
     toolbox.register("attr_mode", random.randint, 0, 4)
-    toolbox.register("individual", tools.initRepeat, creator.Individual,
-                     toolbox.attr_mode, n=n_periods)
+    toolbox.register(
+        "individual",
+        tools.initRepeat,
+        creator.Individual,
+        toolbox.attr_mode,
+        n=n_periods,
+    )
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     toolbox.register("mate", tools.cxTwoPoint)
     toolbox.register("mutate", tools.mutUniformInt, low=0, up=4, indpb=0.1)
@@ -155,8 +163,7 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
 
     # ----- seed initial pop with heuristics ------------------------------
     population = [
-        creator.Individual(h)                # heuristics
-        for h in build_initial_population(ctx)
+        creator.Individual(h) for h in build_initial_population(ctx)  # heuristics
     ]
     population.extend(toolbox.population(n=POP_SIZE - len(population)))
 
@@ -168,7 +175,7 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
         fit = FitnessAccumulator()
         for mode_int, period in zip(individual, ctx.periods):
             flow = solve_energy_flow(
-                ctx, period, soc_kwh=soc, risk_factor=ctx.risk_factor
+                ctx, period, soc_kwh=soc, risk_factor=ctx.risk_factor, mode=mode_int
             )
             fit.add(flow)
             # update SoC (same mathematics as Java Simulator)
@@ -219,7 +226,7 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
     violations = 0
     ess_net_sum = 0.0
     for mode_int, period in zip(best, ctx.periods):
-        flow = solve_energy_flow(ctx, period, soc, ctx.risk_factor)
+        flow = solve_energy_flow(ctx, period, soc, ctx.risk_factor, mode=mode_int)
         kpi.add(flow)
         violations += flow.violated_constraints
         ess_net_sum += flow.ess_net
@@ -234,4 +241,3 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
         ess_net_kwh=ess_net_sum,
         time=ctx.periods[0].time,
     )
-
