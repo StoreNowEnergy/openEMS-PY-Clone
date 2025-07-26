@@ -25,9 +25,9 @@ from typing import List
 import numpy as np
 from deap import base, creator, tools
 
-from .global_optimization_context import GlobalOptimizationContext
-from .energy_flow import solve_energy_flow, EnergyFlowResult
-from .simulation_results import SimulationResult
+from openEMS_PY.global_optimization_context import GlobalOptimizationContext
+from openEMS_PY.energy_flow import solve_energy_flow, EnergyFlowResult
+from openEMS_PY.simulation_results import SimulationResult
 
 
 

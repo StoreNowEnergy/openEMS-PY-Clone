@@ -19,7 +19,7 @@ from typing import List, Sequence
 
 import pandas as pd
 
-from .risk_level import RiskLevel  # <- kept in its own file
+from openEMS_PY.risk_level import RiskLevel  # <- kept in its own file
 
 
 # ---------------------------------------------------------------------------#

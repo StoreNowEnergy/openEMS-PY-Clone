@@ -19,11 +19,16 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 # PV data now loaded from a CSV file instead of PVGIS
 
+# --- allow execution via "Run" in IDEs --------------------------------
+if __package__ is None:
+    import sys
+    sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 # --- OpenEMS‑style helper modules --------------------------------------
-from .system_parameters import SystemParameters
-from .risk_level import RiskLevel
-from .global_optimization_context import GlobalOptimizationContext
-from .simulator import simulate, SimulationResult        # noqa: F401
+from openEMS_PY.system_parameters import SystemParameters
+from openEMS_PY.risk_level import RiskLevel
+from openEMS_PY.global_optimization_context import GlobalOptimizationContext
+from openEMS_PY.simulator import simulate, SimulationResult  # noqa: F401
 
 # ----------------------------------------------------------------------
 # 0)  GLOBAL CONSTANTS  (reuse yours – change once here)                #
@@ -148,17 +153,41 @@ def run_simulation(
         soc = np.clip(soc, system.min_soc_kwh, system.max_soc_kwh)
 
     print(f"\nTotal run‑time: {time.time()-t0:,.1f} s")
-    return pd.DataFrame(r.as_dict() for r in results).set_index("time")
+
+    df_res = pd.DataFrame(r.as_dict() for r in results)
+    if not df_res.empty:
+        df_res = df_res.set_index("time")
+        # enrich with input data for KPIs
+        cols = [
+            "load_kw",
+            "pv_kw",
+            "price_buy_eur_per_kwh",
+            "price_sell_eur_per_kwh",
+        ]
+        df_res = df_res.join(df_input[cols], how="left")
+        df_res["load_kwh"] = df_res.load_kw * 0.25
+        df_res["pv_kwh"] = df_res.pv_kw * 0.25
+        df_res["cost_eur"] = df_res.grid_buy_cost - df_res.grid_sell_revenue
+        df_res["battery_mode"] = df_res.best_schedule.apply(lambda s: s[0])
+    return df_res
 
 # ----------------------------------------------------------------------
 # 3)  KPI PRINT + PLOTS                                                #
 # ----------------------------------------------------------------------
 def kpi_summary(df: pd.DataFrame, system: SystemParameters) -> None:
+    if df.empty:
+        print("No results to summarise.")
+        return
+
     baseline_cost = (
         (df.load_kwh - df.pv_kwh)
-        .mul(np.where(df.load_kwh >= df.pv_kwh,
-                      df.price_buy_eur_per_kwh,
-                      df.price_sell_eur_per_kwh))
+        .mul(
+            np.where(
+                df.load_kwh >= df.pv_kwh,
+                df.price_buy_eur_per_kwh,
+                df.price_sell_eur_per_kwh,
+            )
+        )
         .sum()
     )
     print("\n--- KPI ----------------------------------------------------")
@@ -169,6 +198,10 @@ def kpi_summary(df: pd.DataFrame, system: SystemParameters) -> None:
     print(df.battery_mode.value_counts(normalize=True).mul(100).round(1).astype(str) + " %")
     print("-----------------------------------------------------------")
 def plot_first_day(df: pd.DataFrame) -> None:
+    if df.empty:
+        print("Plot skipped – no data")
+        return
+
     day0 = df.index[0].date().isoformat()
     start = pd.Timestamp(day0, tz=df.index.tz)
     end = start + timedelta(days=1)

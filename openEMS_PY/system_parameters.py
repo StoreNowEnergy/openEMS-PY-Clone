@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .global_optimization_context import Ess, Grid
+from openEMS_PY.global_optimization_context import Ess, Grid
 
 
 @dataclass(slots=True)
