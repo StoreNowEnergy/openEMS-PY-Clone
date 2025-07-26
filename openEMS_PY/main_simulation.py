@@ -111,18 +111,24 @@ def load_input_dataframe() -> pd.DataFrame:
 # ----------------------------------------------------------------------
 # 2)  ROLLING‑HORIZON LOOP  (unchanged)                                #
 # ----------------------------------------------------------------------
-def run_simulation(df_input: pd.DataFrame,
-                   system: SystemParameters,
-                   risk: RiskLevel = RiskLevel.MEDIUM,
-                   quarter_horizon: int = 24,
-                   hour_horizon: int = 18) -> pd.DataFrame:
+def run_simulation(
+    df_input: pd.DataFrame,
+    system: SystemParameters,
+    risk: RiskLevel = RiskLevel.MEDIUM,
+    quarter_horizon: int = 24,
+    hour_horizon: int = 18,
+    max_days: int | None = None,
+) -> pd.DataFrame:
 
     soc = system.capacity_kwh * 0.50
     results: list[SimulationResult] = []
 
     max_start = len(df_input) - (quarter_horizon + hour_horizon * 4)
+    if max_days is not None:
+        max_start = min(max_start, max_days * 96)
+    desc = f"simulate {max_days}d" if max_days is not None else "simulate year"
     t0 = time.time()
-    for idx in tqdm(range(max_start), desc="simulate year"):
+    for idx in tqdm(range(max_start), desc=desc):
 
         ctx = GlobalOptimizationContext.from_dataframe(
             df_input,
@@ -162,35 +168,65 @@ def kpi_summary(df: pd.DataFrame, system: SystemParameters) -> None:
     print("Battery mode share:")
     print(df.battery_mode.value_counts(normalize=True).mul(100).round(1).astype(str) + " %")
     print("-----------------------------------------------------------")
-
-def plot_first_day(df: pd.DataFrame):
+def plot_first_day(df: pd.DataFrame) -> None:
     day0 = df.index[0].date().isoformat()
-    start, end = pd.Timestamp(day0, tz=df.index.tz), pd.Timestamp(day0, tz=df.index.tz) + timedelta(days=1)
+    start = pd.Timestamp(day0, tz=df.index.tz)
+    end = start + timedelta(days=1)
     d = df[start:end]
     if d.empty:
-        print("Plot skipped – no data"); return
+        print("Plot skipped – no data")
+        return
 
-    fig, ax1 = plt.subplots(figsize=(12,6))
+    fig, (ax1, ax2) = plt.subplots(
+        2,
+        1,
+        figsize=(12, 8),
+        sharex=True,
+        gridspec_kw={"height_ratios": [3, 1]},
+    )
+
     ax1.set_title(f"Energy flows – {day0}")
-    ax1.plot(d.index, d.pv_kwh, label="PV kWh", color="orange")
-    ax1.plot(d.index, d.load_kwh, label="Load kWh", color="steelblue")
-    ax1.fill_between(d.index, d.pv_to_ess, label="PV→ESS", alpha=.3)
-    ax1.fill_between(d.index, -d.ess_to_load, label="ESS→Load", alpha=.3)
-    ax1.set_ylabel("kWh per 15 min")
+    if "grid_to_ess" in d:
+        ax1.plot(d.index, d.grid_to_ess, label="Grid→ESS", color="tab:red")
+    if "ess_to_cons" in d:
+        ax1.plot(d.index, -d.ess_to_cons, label="ESS discharge", color="tab:blue")
+    if "load_kwh" in d:
+        ax1.plot(d.index, d.load_kwh, label="Load", color="tab:green")
+    ax1.set_ylabel("Energy [kWh]")
+    if "soc_kwh" in d:
+        ax_soc = ax1.twinx()
+        ax_soc.plot(d.index, d.soc_kwh, label="SoC", color="black", linestyle="--")
+        ax_soc.set_ylabel("SoC [kWh]")
     ax1.legend(loc="upper left")
-    ax2 = ax1.twinx()
-    ax2.plot(d.index, d.price_buy_eur_per_kwh, color="red", label="Buy €/kWh", linewidth=.8)
+
+    ax2.set_title("Day ahead price")
+    if "price_buy_eur_per_kwh" in d:
+        ax2.plot(d.index, d.price_buy_eur_per_kwh, color="purple")
     ax2.set_ylabel("€/kWh")
-    fig.tight_layout(); plt.show()
+
+    fig.tight_layout()
+    plt.show()
+
 
 # ----------------------------------------------------------------------
 # 4)  MAIN                                                             #
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    df_raw  = load_input_dataframe()
-    system  = SystemParameters(capacity_kwh=5)
+    import argparse
 
-    df_res  = run_simulation(df_raw, system, risk=RiskLevel.MEDIUM)
+    parser = argparse.ArgumentParser(description="OpenEMS optimisation demo")
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="Number of days to simulate (default: full year)",
+    )
+    args = parser.parse_args()
+
+    df_raw = load_input_dataframe()
+    system = SystemParameters(capacity_kwh=5)
+
+    df_res = run_simulation(df_raw, system, risk=RiskLevel.MEDIUM, max_days=args.days)
     kpi_summary(df_res, system)
     plot_first_day(df_res)
 
