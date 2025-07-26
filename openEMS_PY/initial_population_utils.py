@@ -24,8 +24,8 @@ from typing import List, Sequence, Protocol, Iterable, Optional
 from collections import OrderedDict
 import random
 
-from .global_optimization_context import GlobalOptimizationContext
-from .energy_schedule_handler import BatteryScheduleHandler
+from openEMS_PY.global_optimization_context import GlobalOptimizationContext
+from openEMS_PY.energy_schedule_handler import BatteryScheduleHandler
 
 
 # --------------------------------------------------------------------------- 

@@ -22,7 +22,7 @@ from typing import Tuple
 import numpy as np
 from scipy.optimize import linprog
 
-from .global_optimization_context import Period, GlobalOptimizationContext
+from openEMS_PY.global_optimization_context import Period, GlobalOptimizationContext
 
 
 
