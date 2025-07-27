@@ -34,8 +34,9 @@ from openEMS_PY.simulation_results import SimulationResult
 # ---------------------------------------------------------------------------#
 #  GA parameters (keep tiny – Python is slower than Java)                    #
 # ---------------------------------------------------------------------------#
-POP_SIZE = 14
-N_GENERATIONS = 4
+# Slightly larger GA settings to better reflect the Java implementation
+POP_SIZE = 20
+N_GENERATIONS = 8
 CXPB, MUTPB = 0.7, 0.3
 
 
