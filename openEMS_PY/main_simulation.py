@@ -202,14 +202,16 @@ def kpi_summary(df: pd.DataFrame, system: SystemParameters) -> None:
     print("Battery mode share:")
     print(df.battery_mode.value_counts(normalize=True).mul(100).round(1).astype(str) + " %")
     print("-----------------------------------------------------------")
-def plot_first_day(df: pd.DataFrame) -> None:
+def plot_timeframe(df: pd.DataFrame, days: int = 1, start_day: int = 0) -> None:
+    """Plot the simulation results for a configurable timeframe."""
+
     if df.empty:
         print("Plot skipped – no data")
         return
 
-    day0 = df.index[0].date().isoformat()
+    day0 = df.index[0].date() + timedelta(days=start_day)
     start = pd.Timestamp(day0, tz=df.index.tz)
-    end = start + timedelta(days=1)
+    end = start + timedelta(days=days)
     d = df[start:end]
     if d.empty:
         print("Plot skipped – no data")
@@ -223,7 +225,7 @@ def plot_first_day(df: pd.DataFrame) -> None:
         gridspec_kw={"height_ratios": [3, 1]},
     )
 
-    ax1.set_title(f"Energy flows – {day0}")
+    ax1.set_title(f"Energy flows – {day0.isoformat()} → {(day0 + timedelta(days=days)).isoformat()}")
     if "grid_charge_kwh" in d:
         ax1.plot(d.index, d.grid_charge_kwh, label="Grid→ESS", color="tab:red")
     if "batt_to_grid_kwh" in d:
@@ -232,6 +234,9 @@ def plot_first_day(df: pd.DataFrame) -> None:
         ax1.plot(d.index, -d.ess_to_cons, label="ESS→Load", color="tab:blue")
     if "load_kwh" in d:
         ax1.plot(d.index, d.load_kwh, label="Load", color="tab:green")
+    if "pv_kwh" in d:
+        ax1.plot(d.index, d.pv_kwh, label="PV", color="tab:cyan")
+
     ax1.set_ylabel("Energy [kWh]")
     if "soc_kwh" in d:
         ax_soc = ax1.twinx()
@@ -261,6 +266,12 @@ if __name__ == "__main__":
         default=None,
         help="Number of days to simulate (default: full year)",
     )
+    parser.add_argument(
+        "--plot-days",
+        type=int,
+        default=1,
+        help="Number of days to display in the plot",
+    )
     args = parser.parse_args()
 
     df_raw = load_input_dataframe()
@@ -268,6 +279,6 @@ if __name__ == "__main__":
 
     df_res = run_simulation(df_raw, system, risk=RiskLevel.MEDIUM, max_days=args.days)
     kpi_summary(df_res, system)
-    plot_first_day(df_res)
+    plot_timeframe(df_res, days=args.plot_days)
 
 
