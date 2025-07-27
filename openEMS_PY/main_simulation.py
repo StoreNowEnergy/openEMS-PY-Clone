@@ -127,6 +127,7 @@ def run_simulation(
 
     soc = system.capacity_kwh * 0.50
     results: list[SimulationResult] = []
+    soc_history: list[float] = []
 
     max_start = len(df_input) - (quarter_horizon + hour_horizon * 4)
     if max_days is not None:
@@ -151,6 +152,7 @@ def run_simulation(
         soc_delta = res.ess_net_kwh
         soc -= (soc_delta / system.discharge_eff) if soc_delta > 0 else (soc_delta * system.charge_eff)
         soc = np.clip(soc, system.min_soc_kwh, system.max_soc_kwh)
+        soc_history.append(soc)
 
     print(f"\nTotal run‑time: {time.time()-t0:,.1f} s")
 
@@ -169,6 +171,9 @@ def run_simulation(
         df_res["pv_kwh"] = df_res.pv_kw * 0.25
         df_res["cost_eur"] = df_res.grid_buy_cost - df_res.grid_sell_revenue
         df_res["battery_mode"] = df_res.best_schedule.apply(lambda s: s[0])
+        df_res["batt_to_grid_kwh"] = (-df_res.grid_to_ess.clip(upper=0)).rename("batt_to_grid_kwh")
+        df_res["grid_charge_kwh"] = df_res.grid_to_ess.clip(lower=0)
+        df_res["soc_kwh"] = soc_history
     return df_res
 
 # ----------------------------------------------------------------------
@@ -179,20 +184,20 @@ def kpi_summary(df: pd.DataFrame, system: SystemParameters) -> None:
         print("No results to summarise.")
         return
 
-    baseline_cost = (
-        (df.load_kwh - df.pv_kwh)
-        .mul(
-            np.where(
-                df.load_kwh >= df.pv_kwh,
-                df.price_buy_eur_per_kwh,
-                df.price_sell_eur_per_kwh,
-            )
-        )
-        .sum()
-    )
+    grid_import_kwh = (df.load_kwh - df.pv_kwh).clip(lower=0)
+    pv_export_kwh = (df.pv_kwh - df.load_kwh).clip(lower=0)
+    baseline_import_cost = (grid_import_kwh * df.price_buy_eur_per_kwh).sum()
+    baseline_pv_revenue = (pv_export_kwh * df.price_sell_eur_per_kwh).sum()
+    baseline_cost = baseline_import_cost - baseline_pv_revenue
+
+    pv_revenue_opt = (df.prod_to_grid * df.price_sell_eur_per_kwh).sum()
+    batt_revenue_opt = (df.batt_to_grid_kwh * df.price_sell_eur_per_kwh).sum()
     print("\n--- KPI ----------------------------------------------------")
     print(f"Baseline (PV only) cost     : {baseline_cost:10.2f} €")
+    print(f"Baseline PV revenue          : {baseline_pv_revenue:10.2f} €")
     print(f"Optimised battery cost       : {df.cost_eur.sum():10.2f} €")
+    print(f"Optimised PV revenue         : {pv_revenue_opt:10.2f} €")
+    print(f"Optimised battery revenue    : {batt_revenue_opt:10.2f} €")
     print(f"→ Savings                    : {baseline_cost-df.cost_eur.sum():10.2f} €")
     print("Battery mode share:")
     print(df.battery_mode.value_counts(normalize=True).mul(100).round(1).astype(str) + " %")
@@ -219,10 +224,12 @@ def plot_first_day(df: pd.DataFrame) -> None:
     )
 
     ax1.set_title(f"Energy flows – {day0}")
-    if "grid_to_ess" in d:
-        ax1.plot(d.index, d.grid_to_ess, label="Grid→ESS", color="tab:red")
+    if "grid_charge_kwh" in d:
+        ax1.plot(d.index, d.grid_charge_kwh, label="Grid→ESS", color="tab:red")
+    if "batt_to_grid_kwh" in d:
+        ax1.plot(d.index, -d.batt_to_grid_kwh, label="ESS→Grid", color="tab:orange")
     if "ess_to_cons" in d:
-        ax1.plot(d.index, -d.ess_to_cons, label="ESS discharge", color="tab:blue")
+        ax1.plot(d.index, -d.ess_to_cons, label="ESS→Load", color="tab:blue")
     if "load_kwh" in d:
         ax1.plot(d.index, d.load_kwh, label="Load", color="tab:green")
     ax1.set_ylabel("Energy [kWh]")

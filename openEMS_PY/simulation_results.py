@@ -6,8 +6,9 @@ Dataclass mirroring
 
   • io.openems.edge.energy.optimizer.SimulationResult
 
-Holds the best schedule for a horizon **and** the aggregated KPIs that
-OpenEMS’ UI later visualises.
+The Python port returns the KPIs for **the first 15 minute period** of the
+optimisation horizon.  This allows a rolling simulation where each call only
+executes the earliest step and advances the state of charge accordingly.
 """
 
 from __future__ import annotations
@@ -19,15 +20,20 @@ import numpy as np
 
 @dataclass(slots=True)
 class SimulationResult:
+    """Outcome of one optimisation horizon."""
+
     # -------------- optimisation outcome --------------------------------
     best_schedule: Sequence[int]          # battery mode per Period index
     fitness: float                        # objective (lower = better)
     violated_constraints: int
 
-    # -------------- KPIs (aggregated for the horizon) -------------------
+    # -------------- KPIs for the FIRST period ---------------------------
     grid_buy_cost: float
     grid_sell_revenue: float
     ess_net_kwh: float                     # positive == discharge
+    grid_to_ess: float                    # +charge from grid, −ESS→grid
+    ess_to_cons: float                    # discharge to consumption
+    prod_to_grid: float                   # PV sold to grid
     time: Optional[datetime] = None        # start time of horizon
 
     @property

@@ -220,24 +220,31 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
     best = tools.selBest(population, k=1)[0]
     fitness_value = best.fitness.values[0]
 
-    # Re‑simulate *once* to obtain detailed KPIs
+    # Re-simulate once more to obtain the flows.  Only the first period is
+    # executed in the rolling optimisation, therefore we keep its KPIs
+    # separately and still aggregate the rest for possible analysis.
     soc = ctx.initial_soc_kwh
     kpi = FitnessAccumulator()
     violations = 0
-    ess_net_sum = 0.0
+    first_flow: EnergyFlowResult | None = None
     for mode_int, period in zip(best, ctx.periods):
         flow = solve_energy_flow(ctx, period, soc, ctx.risk_factor, mode=mode_int)
+        if first_flow is None:
+            first_flow = flow
         kpi.add(flow)
         violations += flow.violated_constraints
-        ess_net_sum += flow.ess_net
-        soc += 0  # SoC update not needed for KPIs beyond 24 h window
+
+    assert first_flow is not None
 
     return SimulationResult(
         best_schedule=list(best),
         fitness=fitness_value,
         violated_constraints=violations,
-        grid_buy_cost=kpi.grid_buy_cost,
-        grid_sell_revenue=kpi.grid_sell_revenue,
-        ess_net_kwh=ess_net_sum,
+        grid_buy_cost=first_flow.grid_buy_cost,
+        grid_sell_revenue=first_flow.grid_sell_revenue,
+        ess_net_kwh=first_flow.ess_net,
+        grid_to_ess=first_flow.grid_to_ess,
+        ess_to_cons=first_flow.ess_to_cons,
+        prod_to_grid=first_flow.prod_to_grid,
         time=ctx.periods[0].time,
     )
