@@ -171,7 +171,7 @@ def run_simulation(
         df_res["pv_kwh"] = df_res.pv_kw * 0.25
         df_res["cost_eur"] = df_res.grid_buy_cost - df_res.grid_sell_revenue
         df_res["battery_mode"] = df_res.best_schedule.apply(lambda s: s[0])
-        df_res["batt_to_grid_kwh"] = (-df_res.grid_to_ess.clip(upper=0)).rename("batt_to_grid_kwh")
+        df_res["batt_to_grid_kwh"] = -df_res.grid_to_ess.clip(upper=0)
         df_res["grid_charge_kwh"] = df_res.grid_to_ess.clip(lower=0)
         df_res["soc_kwh"] = soc_history
     return df_res
