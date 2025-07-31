@@ -109,12 +109,9 @@ def solve_energy_flow(
     discharge_cap = min(max_discharge_kwh, discharge_room)
 
     # ------------------------------------------------------------------ #
-    # Objective   (minimise cost)                                        #
+    # Objective   (OpenEMS style – minimise sum of coefficients)        #
     # ------------------------------------------------------------------ #
-    c = np.zeros(len(C))
-    c[C.GRID_TO_CONS] = period.price_buy
-    c[C.GRID_TO_ESS] = period.price_buy * risk_factor  # <‑‑ risk factor
-    c[C.PROD_TO_GRID] = -period.price_sell  # revenue negative
+    c = np.ones(len(C))
 
     # ------------------------------------------------------------------ #
     # Equality constraints  A_eq · x  = b_eq                            #
@@ -165,11 +162,6 @@ def solve_energy_flow(
     A_eq.append(row)
     b_eq.append(period.production_kwh)
 
-    # 7) fixed consumption
-    row = np.zeros(len(C))
-    row[C.CONS] = 1
-    A_eq.append(row)
-    b_eq.append(period.consumption_kwh)
 
     # ------------------------------------------------------------------ #
     # Inequality constraints  A_ub · x  ≤ b_ub                            #
@@ -188,15 +180,15 @@ def solve_energy_flow(
     A_ub.append(row)
     b_ub.append(discharge_cap)
 
-    # 3) grid import limit  -GRID ≤ max_grid_import_kwh  (GRID negative = import)
+    # 3) grid import limit   GRID ≤ max_grid_import_kwh  (GRID positive = import)
     row = np.zeros(len(C))
-    row[C.GRID] = -1
+    row[C.GRID] = 1
     A_ub.append(row)
     b_ub.append(max_grid_import_kwh)
 
-    # 4) grid export limit   GRID ≤ max_grid_export_kwh
+    # 4) grid export limit  -GRID ≤ max_grid_export_kwh  (GRID negative = export)
     row = np.zeros(len(C))
-    row[C.GRID] = 1
+    row[C.GRID] = -1
     A_ub.append(row)
     b_ub.append(max_grid_export_kwh)
 
@@ -206,6 +198,19 @@ def solve_energy_flow(
     row[C.PROD_TO_CONS] = -1
     A_ub.append(row)
     b_ub.append(-min_self_cons)
+
+    # 6) minimum consumption (CONS ≥ unmanagedConsumption)
+    row = np.zeros(len(C))
+    row[C.CONS] = -1
+    A_ub.append(row)
+    b_ub.append(-period.consumption_kwh)
+
+    # 7) positivity of main flows
+    for coeff in (C.PROD_TO_ESS, C.PROD_TO_GRID, C.ESS_TO_CONS, C.GRID_TO_CONS):
+        row = np.zeros(len(C))
+        row[coeff] = -1
+        A_ub.append(row)
+        b_ub.append(0)
 
     # -- mode-specific constraints ------------------------------------
     if mode == 0:  # CHARGE only
