@@ -173,6 +173,7 @@ def run_simulation(
         df_res["battery_mode"] = df_res.best_schedule.apply(lambda s: s[0])
         df_res["batt_to_grid_kwh"] = -df_res.grid_to_ess.clip(upper=0)
         df_res["grid_charge_kwh"] = df_res.grid_to_ess.clip(lower=0)
+        df_res["pv_to_batt_kwh"] = df_res.prod_to_ess
         df_res["soc_kwh"] = soc_history
     return df_res
 
@@ -199,6 +200,11 @@ def kpi_summary(df: pd.DataFrame, system: SystemParameters) -> None:
     print(f"Optimised PV revenue         : {pv_revenue_opt:10.2f} €")
     print(f"Optimised battery revenue    : {batt_revenue_opt:10.2f} €")
     print(f"→ Savings                    : {baseline_cost-df.cost_eur.sum():10.2f} €")
+    print("Energy totals:")
+    print(f"  Grid→battery : {df.grid_charge_kwh.sum():10.2f} kWh")
+    print(f"  Battery→grid : {df.batt_to_grid_kwh.sum():10.2f} kWh")
+    print(f"  PV→battery   : {df.pv_to_batt_kwh.sum():10.2f} kWh")
+    print(f"  Battery→load : {df.ess_to_cons.sum():10.2f} kWh")
     print("Battery mode share:")
     print(df.battery_mode.value_counts(normalize=True).mul(100).round(1).astype(str) + " %")
     print("-----------------------------------------------------------")

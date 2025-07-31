@@ -245,6 +245,7 @@ def simulate(ctx: GlobalOptimizationContext) -> SimulationResult:
         grid_sell_revenue=first_flow.grid_sell_revenue,
         ess_net_kwh=first_flow.ess_net,
         grid_to_ess=first_flow.grid_to_ess,
+        prod_to_ess=first_flow.prod_to_ess,
         ess_to_cons=first_flow.ess_to_cons,
         prod_to_grid=first_flow.prod_to_grid,
         time=ctx.periods[0].time,

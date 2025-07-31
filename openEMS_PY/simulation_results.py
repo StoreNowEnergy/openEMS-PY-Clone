@@ -32,6 +32,7 @@ class SimulationResult:
     grid_sell_revenue: float
     ess_net_kwh: float                     # positive == discharge
     grid_to_ess: float                    # +charge from grid, −ESS→grid
+    prod_to_ess: float                    # PV charged into ESS
     ess_to_cons: float                    # discharge to consumption
     prod_to_grid: float                   # PV sold to grid
     time: Optional[datetime] = None        # start time of horizon
